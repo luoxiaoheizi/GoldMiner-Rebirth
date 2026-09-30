@@ -17,6 +17,8 @@ npm run preview
 
 将 `minigame/dist/wechat` 或 `minigame/dist/douyin` 导入对应开发者工具，并填写自己的真实小游戏 AppID。详细构建、导入、验证及素材授权说明见 [小游戏开发文档](./minigame/README.md)。
 
+正式上线准备及换电脑继续开发，请从 [上线清单与交接文档](./minigame/LAUNCH_CHECKLIST.md) 开始。当前尚未完成平台真机验收、素材商用权核实及资质审核，抖音侧边栏复访也待接入。
+
 以下为原 LÖVE / 掌机版本说明，其入口与资源保留。
 
 The classic game remake. Build for GameShell, Trimui (Smart Pro and Brick) and other LOVE2D compatible gaming handheld devices. Made with [LÖVE](https://love2d.org/)(11.1).

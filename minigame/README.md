@@ -2,6 +2,8 @@
 
 同一套原生 Canvas 2D / JavaScript 代码生成微信小游戏、抖音小游戏和浏览器预览版本。无需安装 Cocos 或其他引擎，也没有第三方 npm 依赖。原 Lua / LÖVE 工程保留在仓库根目录。
 
+准备换电脑继续开发或正式上线，请先阅读 [上线清单与交接文档](./LAUNCH_CHECKLIST.md)：包含当前缺项、账号与素材准备、双端真机验收、最终构建顺序及发布留档。当前版本尚未完成平台发布验收。
+
 ## 本地构建与预览
 
 需要 Node.js 22 或更新版本。在本目录执行：
@@ -44,7 +46,9 @@ npm.cmd run preview
 node scripts/build.js --wechat-appid <你的微信AppID> --douyin-appid <你的抖音AppID>
 ```
 
-将尖括号占位文字替换为真实 ID，或设置当前终端环境变量 `WECHAT_APPID` / `DOUYIN_APPID` 后构建。AppID 只进入本机构建产物；不要在源码中填写 AppSecret、访问令牌或其他密钥。每次重新构建会替换产物，在开发者工具中手动改过的产物配置也会重置，因此推荐通过构建参数传入 AppID。
+将尖括号占位文字替换为真实 ID，或设置当前终端环境变量 `WECHAT_APPID` / `DOUYIN_APPID` 后构建。AppID 只进入本机构建产物；不要在源码中填写 AppSecret、访问令牌或其他密钥。每次重新构建会替换产物，在开发者工具中手动改过的产物配置也会重置，因此推荐通过构建参数或当前进程环境变量传入 AppID。脚本不会自动读取 `.env` 文件。
+
+**注意：`npm test` 会重建三端产物并清除其中的 AppID，即使已设置 AppID 环境变量也一样。** 请先完成测试，再带真实 AppID 执行最终构建，之后到开发者工具验收和上传；测试与构建不要并行执行。详见 [正式构建顺序](./LAUNCH_CHECKLIST.md#5-最终构建顺序必须注意)。
 
 ## 玩法与输入
 
@@ -72,7 +76,7 @@ dist/          构建后生成的三端目录
 
 ## 可选浏览器回归
 
-`npm.cmd run test:browser` 使用已有的 Playwright 安装运行真实浏览器检查，覆盖开局、放钩、暂停、刷新续玩、结算、商店购买、下一关、失败重试及 4 种手机视口。它启动临时本机服务器并在结束后关闭，截图和报告写入被 Git 忽略的 `artifacts/browser/`。
+`npm.cmd run test:browser` 使用已有的 Playwright 安装运行真实浏览器检查，覆盖开局、放钩、暂停、刷新续玩、结算、商店购买、下一关、失败重试及 4 种手机视口。它读取现有 `dist/web`，不会自动构建；修改源码后先执行测试或构建，避免验证旧产物。它启动临时本机服务器并在结束后关闭，截图和报告写入被 Git 忽略的 `artifacts/browser/`。
 
 本项目没有绑定 Playwright 依赖。已有安装不在当前模块路径时，可在当前终端把 `PLAYWRIGHT_MODULE` 设为其模块目录；没有 Playwright 自带浏览器时，可把 `BROWSER_EXECUTABLE` 设为已安装 Chrome / Chromium 的可执行文件绝对路径。常规 `npm test` 和构建不需要这些工具。最近一次验证范围见 [VALIDATION.md](./VALIDATION.md)。
 
