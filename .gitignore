@@ -5,3 +5,9 @@
 
 # vscode
 .vscode/
+# Generated mini-game packages and local verification output
+minigame/dist/
+minigame/artifacts/
+minigame/node_modules/
+premium-audit.json
+project.private.config.json

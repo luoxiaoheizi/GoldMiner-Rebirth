@@ -1,5 +1,24 @@
 # GoldMiner-Rebirth
 
+## 中文微信小游戏 / 抖音小游戏
+
+已新增双端中文单机版本，位于 [`minigame/`](./minigame/README.md)。同一套 Canvas 2D 游戏代码生成微信、抖音和浏览器三个运行包，无第三方运行时依赖。
+
+- 30 个原版关卡变体、抓取与回收、鼹鼠、TNT 连锁爆炸、神秘福袋、5 种商店道具。
+- 中文界面、触摸操作、横屏安全区适配、声音开关、自动暂停、本地保存与续玩。
+- 暂未接入广告、登录、联网排行榜或支付。
+
+```sh
+cd minigame
+npm test
+npm run build
+npm run preview
+```
+
+将 `minigame/dist/wechat` 或 `minigame/dist/douyin` 导入对应开发者工具，并填写自己的真实小游戏 AppID。详细构建、导入、验证及素材授权说明见 [小游戏开发文档](./minigame/README.md)。
+
+以下为原 LÖVE / 掌机版本说明，其入口与资源保留。
+
 The classic game remake. Build for GameShell, Trimui (Smart Pro and Brick) and other LOVE2D compatible gaming handheld devices. Made with [LÖVE](https://love2d.org/)(11.1).
 
 Download the latest Release [here](https://github.com/zzxzzk115/GoldMiner-Rebirth/releases/latest).

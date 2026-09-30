@@ -1,0 +1,16 @@
+{
+  "name": "goldminer-rebirth-minigame",
+  "version": "1.0.0",
+  "private": true,
+  "description": "黄金矿工·重生中文版：微信小游戏、抖音小游戏与浏览器共享实现",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build": "node scripts/build.js",
+    "preview": "node scripts/preview.js",
+    "test:browser": "node scripts/browser-check.js"
+  }
+}
