@@ -33,7 +33,7 @@ class App {
     this.setupBrowserControls();
     this.cleanup.push(platform.onPointer(event => this.onPointer(event)));
     this.cleanup.push(platform.onKey(event => this.onKey(event)));
-    this.cleanup.push(platform.onResize(() => { this.renderer.resize(); this.render(); }));
+    this.cleanup.push(platform.onResize(() => { this.renderer.resize(); this.syncField(); this.render(); }));
     this.cleanup.push(platform.onHide(() => {
       this.hidden = true;
       this.game.pause();
@@ -54,6 +54,8 @@ class App {
   }
 
   get hasRun() { return this.savedRun !== null; }
+
+  syncField() { this.game.setFieldHeight(this.renderer.layout.fieldHeight || 240); }
 
   readSave() {
     const data = this.platform.readSave();
@@ -109,12 +111,14 @@ class App {
           this.platform.loadImage(`images/${name}.png`),
           new Promise((resolve, reject) => { timeout = setTimeout(() => reject(new Error('资源加载超时')), 12000); }),
         ]);
+      } finally {
+        clearTimeout(timeout);
         completed++;
         if (generation === this.loadingGeneration && !this.destroyed) this.progress = Math.round(completed / ASSETS.length * 100);
-      } finally { clearTimeout(timeout); }
+      }
     }));
     if (generation !== this.loadingGeneration || this.destroyed) return false;
-    if (results.some(result => result.status === 'rejected')) {
+    if (results.some((result, index) => result.status === 'rejected' && ASSETS[index] !== 'hd_atlas')) {
       this.loadError = true;
       this.announce('矿区资源加载失败，请选择重新加载。');
       this.render();
@@ -174,6 +178,7 @@ class App {
           this.notify(result.ok ? '已放入背包，下一关用得上。' : result.reason);
         }
     }
+    this.syncField();
     this.render();
   }
 

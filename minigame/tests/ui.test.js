@@ -15,6 +15,25 @@ function fakeContext() {
   } }, { get(object, name) { return name in object ? object[name] : () => {}; } });
 }
 
+test('高清矿物按原碰撞尺寸绘制，矿工动画读取高清帧而非放大旧像素', () => {
+  const draws = [], context = fakeContext();
+  context.drawImage = (...args) => draws.push(args);
+  const renderer = new Renderer({ width: 390, height: 844, context, dpr: 3 });
+  const atlas = { width: 2048, height: 2048 };
+  renderer.images = { hd_atlas: atlas, gold_big: { width: 32, height: 29 }, miner_sheet: { width: 256, height: 40 } };
+  renderer.image('gold_big', 10, 20);
+  assert.equal(draws[0][0], atlas, '应读取高清图集');
+  assert.deepEqual(draws[0].slice(-4), [10, 20, 32, 29], '清晰度变化不应放大碰撞尺寸');
+  assert.ok(draws[0][3] > 128 && draws[0][4] > 128, '采样来自高清源图');
+  draws.length = 0;
+  renderer.sprite('miner_sheet', 0, 32, 40, 100, 0, 80, 100);
+  renderer.sprite('miner_sheet', 1, 32, 40, 100, 0, 80, 100);
+  assert.equal(draws[0][0], atlas);
+  assert.equal(draws[1][0], atlas);
+  assert.notDeepEqual(draws[0].slice(1, 5), draws[1].slice(1, 5), '回收动作需要不同高清帧');
+  assert.deepEqual(draws[0].slice(-4), [100, 0, 80, 100]);
+});
+
 const viewports = [
   { name: 'desktop', width: 1280, height: 800 },
   { name: '844 landscape safe', width: 844, height: 390, safeArea: { left: 47, top: 48, right: 797, bottom: 369 } },
@@ -70,10 +89,16 @@ for (const viewport of viewports) {
   });
 }
 
-test('short landscape remains a two-column layout and the mining board keeps its aspect ratio', () => {
+test('portrait mining fills the available width and most of the screen; desktop keeps a compact board', () => {
   for (const viewport of viewports) {
     const layout = computeLayout(viewport.width, viewport.height, viewport.safeArea);
-    assert.ok(Math.abs(layout.board.w / layout.board.h - 4 / 3) < 1e-10);
+    if (viewport.height > viewport.width) {
+      assert.equal(layout.board.w, viewport.width);
+      assert.ok(layout.board.h >= viewport.height * 0.65);
+      const renderer = new Renderer({ ...viewport, context: fakeContext(), dpr: 1, kind: 'wechat' });
+      const buttons = renderer.draw(appFor(renderer.platform, 'playing'));
+      assert.equal(buttons.some(button => button.id === 'drop'), false);
+    } else assert.ok(Math.abs(layout.board.w / layout.board.h - 4 / 3) < 1e-10);
     if (viewport.width > viewport.height) assert.equal(layout.landscape, true);
     assert.ok(layout.board.y + layout.board.h <= layout.y + layout.h);
     assert.ok(layout.panel.y + layout.panel.h <= layout.y + layout.h);
@@ -93,6 +118,26 @@ test('all shop descriptions fit above the wallet on the shortest supported board
     const board = renderer.layout.board;
     const descriptions = records.filter(item => item.x === board.x + 12 && item.y > board.y + 65 && item !== wallet);
     descriptions.forEach(item => assert.ok(item.y + item.size <= wallet.y, app.game.shopItems[index].id + ': description/wallet overlap'));
+  }
+});
+
+test('竖屏商店的商品名称、说明与钱包不被操作按钮遮挡', () => {
+  for (const viewport of viewports.filter(item => item.height > item.width)) {
+    const platform = { ...viewport, context: fakeContext(), dpr: 1, kind: 'web' };
+    const renderer = new Renderer(platform), app = appFor(platform, 'shop');
+    const text = [], originalText = renderer.text.bind(renderer), originalButton = renderer.button.bind(renderer);
+    let buttonLabel = false;
+    renderer.text = (value, x, y, size, color, options) => {
+      originalText(value, x, y, size, color, options);
+      if (!buttonLabel) text.push({ value, x, y, w: platform.context.measureText(value).width, h: size });
+    };
+    renderer.button = (...args) => { buttonLabel = true; originalButton(...args); buttonLabel = false; };
+    for (let index = 0; index < app.game.shopItems.length; index++) {
+      app.shopIndex = index; text.length = 0; renderer.buttons = []; renderer.shop(app);
+      for (const item of text) for (const button of renderer.buttons) {
+        assert.equal(intersects(item, button), false, viewport.name + '/' + item.value + ' 被 ' + button.id + ' 遮挡');
+      }
+    }
   }
 });
 

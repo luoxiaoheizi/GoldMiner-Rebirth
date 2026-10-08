@@ -14,7 +14,10 @@ function fixture(options = {}) {
   const platform = {
     kind: 'wechat', context, canvas: {}, width: 960, height: 600, dpr: 2,
     safeArea: { left: 0, top: 0, right: 960, bottom: 600 },
-    loadImage: async () => { if (options.failImages) throw new Error('missing image'); return { width: 320, height: 240 }; },
+    loadImage: async path => {
+      if (options.failImages || (options.failHdAtlas && path === 'images/hd_atlas.png')) throw new Error('missing image');
+      return { width: 320, height: 240 };
+    },
     readSave: () => saved,
     writeSave: data => { if (options.failStorage) return false; saved = JSON.parse(JSON.stringify(data)); return true; },
     setMuted: value => { platform.muted = value; }, playSound: () => {},
@@ -76,6 +79,19 @@ test('资源失败提供重试，成功后恢复可操作菜单', async t => {
   assert.equal(await f.app.ready, true); assert.equal(f.app.loaded, true);
 });
 
+test('高清图集加载失败时自动使用原素材，仍可开局与放钩', async t => {
+  const f = fixture({ failHdAtlas: true }); t.after(() => f.app.destroy());
+  assert.equal(await f.app.ready, true);
+  assert.equal(f.app.loaded, true);
+  assert.equal(f.app.loadError, false);
+  assert.equal(f.app.progress, 100);
+  assert.equal(f.app.renderer.images.hd_atlas, undefined);
+  assert.ok(f.app.renderer.images.miner_sheet);
+  f.app.act('new'); f.app.act('begin'); f.app.act('drop');
+  assert.equal(f.app.game.state, 'playing');
+  assert.equal(f.app.game.hook.state, 'extending');
+});
+
 test('存储不可用时游戏继续运行并提示用户，恢复写入后保留进度', async t => {
   const f = fixture({ failStorage: true }); t.after(() => f.app.destroy()); await f.app.ready;
   f.app.act('new'); f.app.act('begin');
@@ -84,15 +100,27 @@ test('存储不可用时游戏继续运行并提示用户，恢复写入后保�
   assert.equal(f.read().run.state, 'playing');
 });
 
-test('系统取消触摸不会放钩，正常点击可以放钩', async t => {
+test('矿区点击直接放钩，取消、拖出矿区及点暂停不会误放钩', async t => {
   const f = fixture(); t.after(() => f.app.destroy()); await f.app.ready;
+  Object.assign(f.platform, { width: 390, height: 844, safeArea: { left: 0, top: 48, right: 390, bottom: 810 } });
+  f.callbacks.Resize();
   f.app.act('new'); f.app.act('begin');
-  const drop = f.app.renderer.buttons.find(button => button.id === 'drop');
-  const point = { x: drop.x + 8, y: drop.y + 8 };
+  assert.equal(f.app.renderer.buttons.some(button => button.id === 'drop'), false);
+  const board = f.app.renderer.layout.board;
+  const point = { x: board.x + board.w / 2, y: board.y + board.h / 2 };
   f.callbacks.Pointer({ ...point, type: 'down' });
   f.callbacks.Pointer({ ...point, type: 'cancel' });
   f.callbacks.Pointer({ ...point, type: 'up' });
   assert.equal(f.app.game.hook.state, 'swinging');
+  f.callbacks.Pointer({ ...point, type: 'down' });
+  f.callbacks.Pointer({ x: -1, y: -1, type: 'up' });
+  assert.equal(f.app.game.hook.state, 'swinging');
+  const pause = f.app.renderer.buttons.find(button => button.id === 'pause');
+  f.callbacks.Pointer({ x: pause.x + 8, y: pause.y + 8, type: 'down' });
+  f.callbacks.Pointer({ x: pause.x + 8, y: pause.y + 8, type: 'up' });
+  assert.equal(f.app.game.state, 'paused');
+  assert.equal(f.app.game.hook.state, 'swinging');
+  f.app.act('resume');
   f.callbacks.Pointer({ ...point, type: 'down' }); f.callbacks.Pointer({ ...point, type: 'up' });
   assert.equal(f.app.game.hook.state, 'extending');
 });

@@ -67,6 +67,14 @@ async function run() {
       await injectRun(playing);
       await page.getByRole('button', { name: '继续挖矿', exact: true }).click();
       await page.screenshot({ path: path.join(output, `game-${size.width}x${size.height}.png`) });
+      if (size.height > size.width) {
+        assert.equal(await page.getByRole('button', { name: '放下钩爪', exact: true }).count(), 0);
+        await page.mouse.click(size.width * 0.5, size.height * 0.65);
+        await page.getByRole('button', { name: '暂停', exact: true }).click();
+        const hookState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).run.hook.state, SAVE_KEY);
+        assert.ok(['extending', 'retracting'].includes(hookState), '轻点矿区应立即出钩');
+        await page.getByRole('button', { name: '继续挖矿', exact: true }).click();
+      }
       const bounds = await page.locator('#game-controls button').evaluateAll(nodes => nodes.map(node => {
         const r = node.getBoundingClientRect(); return { label: node.textContent, x: r.x, y: r.y, right: r.right, bottom: r.bottom };
       }));
@@ -81,6 +89,7 @@ async function run() {
       await page.keyboard.press('Escape');
     }
     checks.push('4种窄横屏/竖屏：按钮可触达、重新开局确认、玩法弹窗、减少动态偏好');
+    checks.push('竖屏矿区直接点击出钩，无独立放钩按钮');
 
     await page.setViewportSize({ width: 844, height: 390 });
     await injectRun(won);
@@ -89,6 +98,58 @@ async function run() {
     await page.getByRole('button', { name: '下一件', exact: true }).click();
     await page.getByRole('button', { name: '准备下一关', exact: true }).click();
     checks.push('窄横屏商店切换商品和进入下一关');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await injectRun(won);
+    await page.getByRole('button', { name: '前往商店', exact: true }).click();
+    await page.screenshot({ path: path.join(output, 'shop-portrait.png') });
+    await page.getByRole('button', { name: '下一件', exact: true }).click();
+    await page.getByRole('button', { name: /^购买 ·/ }).click();
+    assert.equal(await page.getByRole('button', { name: '已购买', exact: true }).isDisabled(), true);
+    await page.getByRole('button', { name: '准备下一关', exact: true }).click();
+    await page.getByRole('button', { name: '开始本关', exact: true }).waitFor();
+    await page.screenshot({ path: path.join(output, 'ready-portrait.png') });
+    checks.push('竖屏商店商品信息与操作分区，切换、购买及下一关可用');
+
+    const hdContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
+    const hdPage = await hdContext.newPage();
+    hdPage.on('pageerror', error => errors.push(error.message));
+    await hdPage.goto(url);
+    await hdPage.getByRole('button', { name: '开始挖矿', exact: true }).click();
+    await hdPage.screenshot({ path: path.join(output, 'ready-hd-390x844.png') });
+    await hdPage.getByRole('button', { name: '开始本关', exact: true }).click();
+    const pixels = await hdPage.locator('#game-canvas').evaluate(canvas => ({ width: canvas.width, height: canvas.height }));
+    assert.deepEqual(pixels, { width: 1170, height: 2532 });
+    await hdPage.screenshot({ path: path.join(output, 'game-hd-390x844.png') });
+    await hdContext.close();
+    checks.push('三倍像素密度下使用1170×2532画布，高清素材正常加载与绘制');
+
+    const touchContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    const touchPage = await touchContext.newPage();
+    touchPage.on('pageerror', error => errors.push(error.message));
+    await touchPage.goto(url);
+    const highlight = await touchPage.locator('#game-canvas').evaluate(canvas => getComputedStyle(canvas).webkitTapHighlightColor);
+    assert.equal(highlight, 'rgba(0, 0, 0, 0)', '整块画布的系统触摸高亮必须透明');
+    await touchPage.getByRole('button', { name: '开始挖矿', exact: true }).tap();
+    await touchPage.getByRole('button', { name: '开始本关', exact: true }).tap();
+    const touchSession = await touchContext.newCDPSession(touchPage);
+    await touchSession.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 195, y: 550 }] });
+    await touchPage.screenshot({ path: path.join(output, 'game-touch-pressed.png') });
+    await touchSession.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await touchPage.getByRole('button', { name: '暂停', exact: true }).tap();
+    const touchHook = await touchPage.evaluate(key => JSON.parse(localStorage.getItem(key)).run.hook.state, SAVE_KEY);
+    assert.ok(['extending', 'retracting'].includes(touchHook), '触摸结束仍需直接出钩');
+    await touchContext.close();
+    checks.push('手机触摸画布无系统蓝色高亮，按住画面与轻点出钩正常');
+
+    await page.route('**/images/hd_atlas.png', route => route.abort());
+    await page.reload();
+    await page.getByRole('button', { name: '继续挖矿', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: '重新加载', exact: true }).count(), 0);
+    await page.unroute('**/images/hd_atlas.png');
+    await page.reload();
+    await page.getByRole('button', { name: '继续挖矿', exact: true }).waitFor();
+    checks.push('高清图集单独加载失败时自动回退原素材，仍可进入游戏');
 
     await page.route('**/images/bg_top.png', route => route.abort());
     await page.reload();

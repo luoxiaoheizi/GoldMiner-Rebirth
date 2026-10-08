@@ -55,6 +55,18 @@ for (const kind of ['wechat', 'douyin']) {
   });
 }
 
+test('带样式的小游戏画布关闭系统触摸高亮，点击仍发送正常坐标', () => {
+  const mock = sdkMock();
+  mock.canvas.style = { webkitTapHighlightColor: 'rgba(51, 181, 229, 0.4)' };
+  const platform = createPlatform('wechat', { sdk: mock.sdk, root: {} });
+  assert.equal(mock.canvas.style.webkitTapHighlightColor, 'transparent');
+  let pointer;
+  platform.onPointer(event => { pointer = event; });
+  mock.events.TouchEnd({ changedTouches: [{ clientX: 195, clientY: 550 }] });
+  assert.deepEqual(pointer, { x: 195, y: 550, type: 'up' });
+  platform.destroy();
+});
+
 test('窗口变化使用事件尺寸，前后台事件不重复通知且停止音频', () => {
   const mock = sdkMock();
   const platform = createPlatform('wechat', { sdk: mock.sdk, root: {} });

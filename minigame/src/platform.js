@@ -18,6 +18,8 @@ function createPlatform(kind, options) {
   const doc = root.document;
   const canvas = options.canvas || (isWeb ? doc.getElementById('game-canvas') : sdk.createCanvas());
   if (!canvas) throw new Error('无法创建游戏画布');
+  // DOM-backed simulators otherwise tint the entire interactive canvas on tap.
+  if (canvas.style) canvas.style.webkitTapHighlightColor = 'transparent';
   const context = canvas.getContext('2d');
   if (!context) throw new Error('当前设备不支持 Canvas 2D');
   const listeners = { pointer: [], key: [], resize: [], hide: [], show: [] };

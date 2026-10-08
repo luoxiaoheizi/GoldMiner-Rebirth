@@ -8,6 +8,21 @@ const os = require('node:os');
 const vm = require('node:vm');
 const { build, bundle, parseOptions, inside, readUtf8, DIST } = require('../scripts/build');
 
+test('高清透明图集尺寸与源区域一致，所有动作帧都位于图内', () => {
+  const png = fs.readFileSync(path.join(__dirname, '../../images/hd_atlas.png'));
+  const atlas = require('../src/ui/hd-assets.json');
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+  assert.equal(png.readUInt32BE(16), atlas.width);
+  assert.equal(png.readUInt32BE(20), atlas.height);
+  assert.ok(atlas.width >= 1024 && atlas.height >= 1024);
+  assert.equal(png[25], 6, 'RGBA PNG 保留透明背景');
+  assert.equal(atlas.sprites.miner_sheet.length, 4);
+  for (const [name, frames] of Object.entries(atlas.sprites)) for (const frame of frames) {
+    assert.ok(frame.x >= 0 && frame.y >= 0 && frame.w > 0 && frame.h > 0, name);
+    assert.ok(frame.x + frame.w <= atlas.width && frame.y + frame.h <= atlas.height, name + ' 源区域越界');
+  }
+});
+
 test('AppID 仅来自显式本地参数或环境，不生成虚假 ID', () => {
   assert.deepEqual(parseOptions([], {}), { wechatAppid: '', douyinAppid: '' });
   assert.equal(parseOptions(['--wechat-appid', 'wx1234567890abcdef'], {}).wechatAppid, 'wx1234567890abcdef');
@@ -44,12 +59,13 @@ test('无 eval 打包器保留 CommonJS 缓存、相对模块和入口行为', (
   }
 });
 
-test('完整构建生成双端横屏配置、中文网页和本地资源', async () => {
+test('完整构建生成双端竖屏配置、中文网页和本地资源', async () => {
   const report = build();
   assert.equal(report.length, 3);
   for (const item of report) {
     assert.ok(item.bytes < 4 * 1024 * 1024);
     assert.ok(fs.existsSync(path.join(item.directory, 'images', 'gold_big.png')));
+    assert.ok(fs.existsSync(path.join(item.directory, 'images', 'hd_atlas.png')));
     assert.ok(fs.existsSync(path.join(item.directory, 'audios', 'money.wav')));
     assert.equal(fs.existsSync(path.join(item.directory, 'fonts')), false);
     const app = bootBundle(item.directory);
@@ -64,7 +80,7 @@ test('完整构建生成双端横屏配置、中文网页和本地资源', async
     if (item.platform === 'web') continue;
     const game = JSON.parse(readUtf8(path.join(item.directory, 'game.json')));
     const project = JSON.parse(readUtf8(path.join(item.directory, 'project.config.json')));
-    assert.equal(game.deviceOrientation, 'landscape');
+    assert.equal(game.deviceOrientation, 'portrait');
     assert.equal(Object.hasOwn(project, 'appid'), false);
     if (item.platform === 'wechat') assert.equal(project.compileType, 'game');
     assert.match(readUtf8(path.join(item.directory, 'game.js')), new RegExp('createPlatform\\("' + item.platform + '"\\)'));

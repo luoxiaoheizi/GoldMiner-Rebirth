@@ -87,8 +87,12 @@ function prepareOutput(target) {
   if (fs.existsSync(DIST)) assertRegularTree(DIST);
   if (fs.existsSync(target)) {
     if (!fs.existsSync(path.join(target, MARKER))) throw new Error('拒绝覆盖非构建目录：' + target);
-    // Both absolute containment and every symlink are checked before this removal.
-    fs.rmSync(target, { recursive: true, force: true });
+    // DevTools may hold the output directory open on Windows. Keep directories
+    // in place and remove only generated files after containment/symlink checks.
+    for (const file of listFiles(target)) {
+      if (!inside(target, file)) throw new Error('清理路径超出构建目录');
+      fs.unlinkSync(file);
+    }
   }
   fs.mkdirSync(target, { recursive: true });
   write(path.join(target, MARKER), '由 minigame/scripts/build.js 生成，可重新构建。\n');
@@ -123,7 +127,7 @@ function build(options) {
       write(path.join(target, 'index.html'), readUtf8(path.join(ROOT, 'templates', 'web.html')));
     } else {
 
-      writeJson(path.join(target, 'game.json'), { deviceOrientation: 'landscape', showStatusBar: false });
+      writeJson(path.join(target, 'game.json'), { deviceOrientation: 'portrait', showStatusBar: false });
       const project = {
         description: '黄金矿工·重生：中文版单机小游戏',
         projectname: 'goldminer-rebirth-' + kind,

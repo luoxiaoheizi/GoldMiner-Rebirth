@@ -38,6 +38,47 @@ function shopGame() {
   return game;
 }
 
+test('竖屏矿区延伸后深处金块可抓取并结算，素材尺寸不变', () => {
+  const game = running();
+  game.setFieldHeight(600);
+  arrange(game, [{ type: 'MiniGold', x: 153, y: 520 }, { type: 'MiniGold', x: 20, y: 580 }]);
+  assert.equal(game.entities[0].width, 10);
+  assert.equal(game.releaseHook(), true);
+  advance(game, 6);
+  assert.equal(game.player.money, 50);
+});
+
+test('竖屏存档及旧版存档均可恢复，缩放矿区不会丢失进度或抓取状态', () => {
+  const game = running();
+  const legacy = game.exportSave(); delete legacy.fieldHeight;
+  assert.equal(new Game().restoreSave(legacy), true);
+  game.setFieldHeight(600);
+  game.hook.angle = 0; game._positionHook();
+  game.releaseHook(); advance(game, 0.1);
+  const snapshot = game.exportSave();
+  const restored = new Game();
+  assert.equal(restored.restoreSave(snapshot), true);
+  assert.equal(restored.fieldHeight, 600);
+  assert.equal(restored.timeLeft, game.timeLeft);
+  const remaining = restored.timeLeft;
+  restored.setFieldHeight(480);
+  assert.equal(restored.timeLeft, remaining);
+  assert.equal(restored.hook.state, game.hook.state);
+  assert.equal(restored.entities.length, game.entities.length);
+});
+
+test('钩爪到达竖屏底部后转回横屏，仍能保存并继续回收', () => {
+  const game = running(() => 0);
+  game.setFieldHeight(610.9128205128205);
+  game.hook.angle = -13; game._positionHook(); game.releaseHook();
+  for (let frame = 0; frame < 600 && game.hook.state === 'extending'; frame++) game.update(1 / 120);
+  assert.equal(game.hook.state, 'retracting');
+  game.setFieldHeight(240);
+  const restored = new Game();
+  assert.equal(restored.restoreSave(game.exportSave()), true);
+  assert.equal(restored.hook.state, 'retracting');
+});
+
 test('all 30 original layouts and all 579 entities are migrated without coordinate loss', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../levels.lua'), 'utf8');
   const blocks = [...source.matchAll(/    \['(L\d+_\d+)'\] = \{/g)];

@@ -40,6 +40,7 @@ class Game {
     this.random = options.random || Math.random;
     this.onEvent = options.onEvent || (() => {});
     this.state = 'menu';
+    this.fieldHeight = 240;
     this.player = freshPlayer();
     this.levelId = 'L1_1';
     this.background = LEVELS[this.levelId].background;
@@ -80,6 +81,10 @@ class Game {
     this.elapsed = 0;
     this.startMoney = this.player.money;
     this.entities = LEVELS[this.levelId].entities.map((source, index) => this._createEntity(source, index));
+    // Preserve sprite dimensions while spreading original level centres down a taller mine.
+    this.entities.forEach(entity => {
+      entity.y = 40 + (entity.y + entity.height / 2 - 40) * (this.fieldHeight - 40) / 200 - entity.height / 2;
+    });
     this.hook = freshHook();
     this.effects = [];
     this._accumulator = 0;
@@ -100,6 +105,27 @@ class Game {
       active: true, grabbed: false, destroyed: false, direction,
       moving: !!config.mobile, minX: Math.min(x, end), maxX: Math.max(x, end), idleTimer: 0,
       effectsApplied: false };
+  }
+
+  setFieldHeight(height) {
+    height = clamp(Number(height) || 240, 240, 1200);
+    if (Math.abs(height - this.fieldHeight) < 0.01) return;
+    const ratio = (height - 40) / (this.fieldHeight - 40);
+    this.entities.forEach(entity => {
+      if (!entity.grabbed) entity.y = 40 + (entity.y + entity.height / 2 - 40) * ratio - entity.height / 2;
+    });
+    this.effects.forEach(effect => { effect.y = 40 + (effect.y - 40) * ratio; });
+    // Keep in-flight cargo attached through a viewport change without awarding it again.
+    const hook = this.hook;
+    if (hook.length > 0) {
+      const angle = hook.angle * Math.PI / 180;
+      const dx = -Math.sin(angle) * hook.length, dy = Math.cos(angle) * hook.length * ratio;
+      hook.angle = clamp(Math.atan2(-dx, dy) * 180 / Math.PI, -75, 75);
+      hook.length = Math.hypot(dx, dy);
+    }
+    this.fieldHeight = height;
+    hook.length = Math.min(hook.length, height === 240 ? MAX_LENGTH : Math.hypot(320, height - 30));
+    this._positionHook();
   }
 
   startLevel() {
@@ -280,6 +306,8 @@ class Game {
 
   _updateHook(dt) {
     const hook = this.hook;
+    const speedScale = (this.fieldHeight - 30) / 210;
+    const maxLength = this.fieldHeight === 240 ? MAX_LENGTH : Math.hypot(320, this.fieldHeight - 30);
     if (hook.state === 'swinging') {
       hook.angle += hook.swingDirection * HOOK_SWING * dt;
       if (hook.angle <= -75 || hook.angle >= 75) {
@@ -296,13 +324,13 @@ class Game {
     }
     if (hook.state === 'extending') {
       const oldX = hook.tipX, oldY = hook.tipY;
-      hook.length = Math.min(MAX_LENGTH, hook.length + dt * HOOK_SPEED);
+      hook.length = Math.min(maxLength, hook.length + dt * HOOK_SPEED * speedScale);
       this._positionHook();
       const hits = this.entities.filter(entity => entity.active && !entity.grabbed &&
         segmentDistance(entity.x + entity.width / 2, entity.y + entity.height / 2, oldX, oldY, hook.tipX, hook.tipY) <= entity.radius + 6);
       hits.sort((a, b) => Math.hypot(a.x + a.width / 2 - oldX, a.y + a.height / 2 - oldY) - Math.hypot(b.x + b.width / 2 - oldX, b.y + b.height / 2 - oldY));
       if (hits.length) this._grab(hits[0]);
-      else if (hook.length >= MAX_LENGTH || hook.tipX <= 2 || hook.tipX >= 318 || hook.tipY >= 238) {
+      else if (hook.length >= maxLength || hook.tipX <= 2 || hook.tipX >= 318 || hook.tipY >= this.fieldHeight - 2) {
         hook.state = 'retracting';
         this._sound('GrabBack');
       }
@@ -310,7 +338,7 @@ class Game {
     }
     if (hook.state === 'retracting') {
       const entity = this.entities.find(item => item.id === hook.grabbedId);
-      const speed = entity ? HOOK_SPEED * this.player.strength / entity.mass : HOOK_SPEED;
+      const speed = (entity ? HOOK_SPEED * this.player.strength / entity.mass : HOOK_SPEED) * speedScale;
       hook.length = Math.max(0, hook.length - speed * dt);
       this._positionHook();
       if (hook.length <= 0) {
@@ -391,7 +419,7 @@ class Game {
 
   exportSave() {
     if (this.state === 'menu' || this.state === 'gameover') return null;
-    return copy({ version: SAVE_VERSION, state: this.state, player: this.player, levelId: this.levelId,
+    return copy({ version: SAVE_VERSION, fieldHeight: this.fieldHeight, state: this.state, player: this.player, levelId: this.levelId,
       timeLeft: this.timeLeft, elapsed: this.elapsed, startMoney: this.startMoney,
       entities: this.entities, hook: this.hook, shopItems: this.shopItems, result: this.result });
   }
@@ -400,6 +428,7 @@ class Game {
     const snapshot = validateSave(data);
     if (!snapshot) return false;
     this.player = snapshot.player;
+    this.fieldHeight = snapshot.fieldHeight;
     this.levelId = snapshot.levelId;
     this.background = LEVELS[this.levelId].background;
     this.timeLeft = snapshot.timeLeft;
@@ -421,6 +450,8 @@ class Game {
 function validateSave(data) {
   // Storage is untrusted: restore known fields only and reject partial/inconsistent runs.
   if (!data || typeof data !== 'object' || data.version !== SAVE_VERSION || !['ready', 'playing', 'paused', 'result', 'shop'].includes(data.state)) return null;
+  const fieldHeight = data.fieldHeight == null ? 240 : data.fieldHeight;
+  if (!finite(fieldHeight, 240, 1200)) return null;
   const p = data.player;
   if (!p || !integer(p.level, 1, MAX_LEVEL) || !integer(p.money, 0, 1e10) || p.goal !== goalForLevel(p.level)
     || p.goalAddOn !== 275 + Math.min(p.level - 1, 8) * 270 || !integer(p.dynamiteCount, 0, 12)
@@ -437,7 +468,7 @@ function validateSave(data) {
     const e = data.entities[index];
     if (!e || e.id !== index || e.type !== layout[index].type) return null;
     const c = ENTITY_CONFIG[e.type];
-    if (!finite(e.x, -50, 350) || !finite(e.y, 0, 270) || !finite(e.mass, 0.5, 10) || !integer(e.bonus, 0, 1000)
+    if (!finite(e.x, -50, 350) || !finite(e.y, 0, fieldHeight + 30) || !finite(e.mass, 0.5, 10) || !integer(e.bonus, 0, 1000)
       || ![-1, 1].includes(e.direction) || !finite(e.minX, -20, 320) || !finite(e.maxX, e.minX, 340)
       || !finite(e.idleTimer, 0, 1) || ['active', 'grabbed', 'destroyed', 'moving', 'effectsApplied'].some(key => typeof e[key] !== 'boolean')) return null;
     entities.push({ id: index, type: e.type, x: e.x, y: e.y, width: c.width, height: c.height,
@@ -447,7 +478,7 @@ function validateSave(data) {
   }
   const h = data.hook;
   if (!h || !['swinging', 'extending', 'retracting', 'reward'].includes(h.state) || !finite(h.angle, -75, 75)
-    || ![-1, 1].includes(h.swingDirection) || !finite(h.length, 0, MAX_LENGTH) || !finite(h.rewardTimer, 0, 1)) return null;
+    || ![-1, 1].includes(h.swingDirection) || !finite(h.length, 0, fieldHeight === 240 ? MAX_LENGTH : Math.hypot(320, fieldHeight - 30)) || !finite(h.rewardTimer, 0, 1)) return null;
   if (h.grabbedId !== null && (!integer(h.grabbedId, 0, entities.length - 1) || h.state !== 'retracting'
     || !entities[h.grabbedId].active || !entities[h.grabbedId].grabbed)) return null;
   if (entities.some(e => e.grabbed && e.id !== h.grabbedId)) return null;
@@ -472,7 +503,7 @@ function validateSave(data) {
   Object.keys(player).forEach(key => { player[key] = p[key]; });
   const hook = Object.assign(freshHook(), { state: h.state, angle: h.angle, swingDirection: h.swingDirection,
     length: h.length, grabbedId: h.grabbedId, rewardTimer: h.rewardTimer });
-  return { state: data.state, player, levelId: data.levelId, timeLeft: data.timeLeft, elapsed: data.elapsed,
+  return { state: data.state, fieldHeight, player, levelId: data.levelId, timeLeft: data.timeLeft, elapsed: data.elapsed,
     startMoney: data.startMoney, entities, hook, shopItems, result };
 }
 

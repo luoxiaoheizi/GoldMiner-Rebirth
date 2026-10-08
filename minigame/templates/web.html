@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#241B16">
+  <meta name="theme-color" content="#FFDA2E">
   <meta name="description" content="黄金矿工·重生中文版：找准时机放下钩爪，开采黄金，达成目标。支持触摸和键盘。">
   <title>黄金矿工 · 重生</title>
   <style>
     :root { color-scheme: dark; --safe-top: env(safe-area-inset-top, 0px); --safe-right: env(safe-area-inset-right, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-left: env(safe-area-inset-left, 0px); }
     * { box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #241B16; color: #fff4d8; font-family: system-ui, "Microsoft YaHei", "PingFang SC", sans-serif; }
-    #game-shell { position: relative; width: 100%; height: 100%; isolation: isolate; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #FFDA2E; color: #684A1A; font-family: system-ui, "Microsoft YaHei", "PingFang SC", sans-serif; }
+    #game-shell { position: relative; width: 100%; height: 100%; isolation: isolate; -webkit-tap-highlight-color: transparent; }
     #game-canvas { display: block; touch-action: none; }
     #game-controls { position: absolute; inset: 0; pointer-events: none; }
     .game-control { position: absolute; pointer-events: auto; color: transparent; background: transparent; border: 0; border-radius: 12px; padding: 0; font: inherit; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -23,7 +23,7 @@
 </head>
 <body>
   <main id="game-shell" aria-label="黄金矿工游戏">
-    <canvas id="game-canvas" role="img" aria-label="黄金矿工游戏画面。使用下方操作按钮，或空格键放钩。"></canvas>
+    <canvas id="game-canvas" tabindex="0" role="img" aria-label="黄金矿工游戏画面。轻点矿区，或空格键放钩。"></canvas>
     <div id="game-controls" role="group" aria-label="游戏操作"></div>
     <p id="game-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
     <noscript>游戏需要 JavaScript。请启用 JavaScript 后刷新页面。</noscript>
