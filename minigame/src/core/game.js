@@ -9,6 +9,8 @@ const HOOK_SWING = 65;
 const MAX_LENGTH = 230;
 const SAVE_VERSION = 1;
 const MAX_LEVEL = 100000;
+const BASE_STRENGTH = 1.2;
+const BALANCE_VERSION = 1;
 
 function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
 function copy(value) { return JSON.parse(JSON.stringify(value)); }
@@ -17,7 +19,7 @@ function integer(value, min, max) { return Number.isInteger(value) && value >= m
 function own(object, key) { return Object.prototype.hasOwnProperty.call(object, key); }
 
 function freshPlayer() {
-  const player = { level: 1, money: 0, goal: 650, goalAddOn: 275, dynamiteCount: 0, strength: 1 };
+  const player = { level: 1, money: 0, goal: 650, goalAddOn: 275, dynamiteCount: 0, strength: BASE_STRENGTH };
   BUFF_FLAGS.forEach(flag => { player[flag] = false; });
   return player;
 }
@@ -75,7 +77,8 @@ class Game {
   }
 
   _prepareLevel() {
-    this.levelId = 'L' + levelGroup(this.player.level) + '_' + this._randomInt(1, 3);
+    // Every new run has the same opening mine; later levels retain their variants.
+    this.levelId = this.player.level === 1 ? 'L1_1' : 'L' + levelGroup(this.player.level) + '_' + this._randomInt(1, 3);
     this.background = LEVELS[this.levelId].background;
     this.timeLeft = LEVEL_DURATION;
     this.elapsed = 0;
@@ -187,7 +190,7 @@ class Game {
     this._positionHook();
     this.result = { success, money: this.player.money, goal: this.player.goal,
       earned: this.player.money - this.startMoney, level: this.player.level, reason };
-    this.player.strength = 1;
+    this.player.strength = BASE_STRENGTH;
     BUFF_FLAGS.forEach(flag => { this.player[flag] = false; });
     this._setState(success ? 'result' : 'gameover');
     this._sound(success ? 'MadeGoal' : 'Low');
@@ -412,14 +415,15 @@ class Game {
   }
 
   _resetHook() {
-    this.hook = freshHook();
+    const { angle, swingDirection } = this.hook;
+    this.hook = Object.assign(freshHook(), { angle, swingDirection });
     this._positionHook();
     this._sound('HookReset');
   }
 
   exportSave() {
     if (this.state === 'menu' || this.state === 'gameover') return null;
-    return copy({ version: SAVE_VERSION, fieldHeight: this.fieldHeight, state: this.state, player: this.player, levelId: this.levelId,
+    return copy({ version: SAVE_VERSION, balanceVersion: BALANCE_VERSION, fieldHeight: this.fieldHeight, state: this.state, player: this.player, levelId: this.levelId,
       timeLeft: this.timeLeft, elapsed: this.elapsed, startMoney: this.startMoney,
       entities: this.entities, hook: this.hook, shopItems: this.shopItems, result: this.result });
   }
@@ -427,6 +431,10 @@ class Game {
   restoreSave(data) {
     const snapshot = validateSave(data);
     if (!snapshot) return false;
+    if (data.balanceVersion == null) {
+      snapshot.player.strength = Math.min(6, snapshot.player.strength * BASE_STRENGTH);
+      snapshot.entities.forEach(entity => { if (/Gold/.test(entity.type)) entity.mass *= 0.8; });
+    }
     this.player = snapshot.player;
     this.fieldHeight = snapshot.fieldHeight;
     this.levelId = snapshot.levelId;

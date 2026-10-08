@@ -2,10 +2,52 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+
+test('回收结束保持出钩角度和摆动方向，不跳回左侧', () => {
+  const game = running();
+  game.hook.angle = -28; game.hook.swingDirection = 1;
+  game.hook.state = 'reward'; game.hook.rewardTimer = 0.001;
+  game._updateHook(1 / 120);
+  assert.equal(game.hook.state, 'swinging');
+  assert.equal(game.hook.angle, -28); assert.equal(game.hook.swingDirection, 1);
+  game._updateHook(1 / 120); assert.ok(game.hook.angle > -28);
+});
+
+test('基础力量为1.2，四种金块质量降低至0.8倍，旧存档仅转换一次', () => {
+  const game = running();
+  assert.equal(game.player.strength, 1.2);
+  const masses = { MiniGold: 2, NormalGold: 3.5, NormalGoldPlus: 5, BigGold: 7 };
+  for (const [type, original] of Object.entries(masses)) {
+    assert.ok(Math.abs(game._createEntity({ type, x: 10, y: 100 }, 0).mass - original * 0.8) < 1e-10);
+  }
+  const legacy = game.exportSave(); delete legacy.balanceVersion;
+  legacy.player.strength = 1;
+  legacy.entities.filter(e => /Gold/.test(e.type)).forEach(e => { e.mass /= 0.8; });
+  const restored = new Game(); assert.ok(restored.restoreSave(legacy));
+  assert.equal(restored.player.strength, 1.2);
+  const once = restored.exportSave();
+  assert.ok(restored.restoreSave(once)); assert.deepEqual(restored.exportSave(), once);
+});
 const fs = require('node:fs');
 const path = require('node:path');
 const { Game, ENTITY_CONFIG, SHOP_ITEMS, goalForLevel, levelGroup } = require('../src/core/game');
 const LEVELS = require('../src/data/levels.json');
+
+test('后续关卡重新开始固定第一张地图并清空矿物和钩爪状态', () => {
+  const game = running(() => 0.99);
+  game.player.level = 5; game._prepareLevel();
+  game.player.money = 9000; game.player.dynamiteCount = 4; game.player.hasGemPolish = true;
+  game.hook.state = 'extending'; game.hook.length = 80;
+  game.effects.push({ type: 'bonus', ttl: 1 });
+  game.startNew();
+  assert.equal(game.levelId, 'L1_1'); assert.equal(game.player.level, 1);
+  assert.equal(game.player.goal, 650); assert.equal(game.player.money, 0);
+  assert.equal(game.player.dynamiteCount, 0); assert.equal(game.player.hasGemPolish, false);
+  assert.equal(game.hook.state, 'swinging'); assert.equal(game.hook.length, 0);
+  assert.deepEqual(game.effects, []); assert.deepEqual(game.shopItems, []); assert.equal(game.result, null);
+  assert.deepEqual(game.entities.map(e => ({ type: e.type, x: e.x, y: e.y })), LEVELS.L1_1.entities);
+  game.startNew(); assert.equal(game.levelId, 'L1_1');
+});
 
 function running(random = () => 0.5) {
   const game = new Game({ random });
@@ -241,7 +283,7 @@ test('all four next-level buffs apply and expire on settlement', () => {
   assert.equal(game.player.hasGemPolish, false);
   assert.equal(game.player.hasStrengthDrink, false);
   assert.equal(game.player.hasLuckyClover, false);
-  assert.equal(game.player.strength, 1);
+  assert.equal(game.player.strength, 1.2);
 });
 
 test('gem polish increases only the diamond component of a diamond mole', () => {
@@ -269,7 +311,7 @@ test('fortune bags provide money, dynamite or strength; clover doubles the speci
   strength.random = () => 0.3;
   catchObject(strength, 'QuestionBag');
   assert.equal(strength.player.money, 0);
-  assert.equal(strength.player.strength, 2.5);
+  assert.equal(strength.player.strength, 1.2 * 1.5 + 1);
   const noClover = running();
   noClover.random = () => 0.3;
   catchObject(noClover, 'QuestionBag');

@@ -98,7 +98,7 @@ class Renderer {
     const ctx = this.ctx;
     ctx.fillStyle = color;
     ctx.font = `${options.bold ? '700 ' : ''}${size}px ${theme.fonts[options.font || 'body']}`;
-    ctx.textBaseline = 'top';
+    ctx.textBaseline = options.baseline || 'top';
     ctx.textAlign = options.align || 'left';
     ctx.fillText(String(value), x, y);
     ctx.textAlign = 'left';
@@ -509,15 +509,16 @@ class Renderer {
     const balanceY = l.y + (wide ? 4 : Math.min(44, l.h * 0.055));
     this.text('$ ' + game.player.money, l.x + l.w / 2, balanceY, wide ? 24 : 34, '#64CF36', { align: 'center', bold: true });
     const bubbleY = balanceY + (wide ? 32 : 62), bubbleH = wide ? 32 : 74;
-    this.panel({ x, y: bubbleY, w, h: bubbleH }, '#FFFDF6', '#332619', 2);
+    this.speechBubble({ x, y: bubbleY, w, h: bubbleH });
     this.wrapText('点击货架上的道具即可购买，买好后点击下一关继续游戏。', x + 12, bubbleY + 8, w - 24, wide ? 12 : 18, '#282018', wide ? 16 : 26);
     const actionY = bubbleY + bubbleH + 16, half = (w - 24) / 2;
     this.button('invite', '邀请好友', { x: x + 6, y: actionY, w: half - 6, h: 48 }, 'invite', { primary: true, fontSize: 20 });
     this.button('next-level', '下一关', { x: x + half + 24, y: actionY, w: half - 6, h: 48 }, 'next-level', { primary: true, fontSize: 20 });
     const goodsY = actionY + 64, goodsBottom = l.y + l.h - 64;
     const columns = wide ? Math.max(1, game.shopItems.length) : 2;
-    const rows = Math.max(1, Math.ceil(game.shopItems.length / columns));
+    const rows = Math.max(wide ? 1 : 2, Math.ceil(game.shopItems.length / columns));
     const cellW = w / columns, cellH = Math.max(48, (goodsBottom - goodsY) / rows);
+    this.shopRack({ x, y: goodsY, w, h: cellH * rows }, rows, cellH);
     game.shopItems.forEach((item, index) => {
       const col = index % columns, row = Math.floor(index / columns);
       const card = { x: x + col * cellW + 5, y: goodsY + row * cellH, w: cellW - 10, h: cellH - (cellH > 60 ? 8 : 0) };
@@ -532,11 +533,63 @@ class Renderer {
         this.shopIcon(item.id, card.x + (card.w - iconSize) / 2, card.y + card.h - 54 - iconSize, iconSize);
       }
       const shelfY = card.y + card.h - 27;
-      this.panel({ x: card.x - 5, y: shelfY, w: cellW, h: 26 }, '#DEB77A', '#9F733C', 0);
       this.text(item.name, card.x + card.w / 2, shelfY - 24, wide ? 12 : 15, '#FFF2CB', { align: 'center' });
-      this.text(item.purchased ? '已购买' : '$ ' + item.price, card.x + card.w / 2, shelfY + 2, wide ? 15 : 20,
-        item.purchased || !enough ? '#71502A' : '#37891B', { align: 'center', bold: true });
+      this.panel({ x: card.x + card.w * 0.12, y: shelfY + 1, w: card.w * 0.76, h: 24 }, '#FFE5AA', '#9B642E', 4);
+      this.text(item.purchased ? '已购买' : '$ ' + item.price, card.x + card.w / 2, shelfY + 13, wide ? 15 : 20,
+        item.purchased || !enough ? '#71502A' : '#37891B', { align: 'center', baseline: 'middle', bold: true });
     });
+  }
+
+  speechBubble(rect) {
+    const ctx = this.ctx, { x, y, w, h } = rect;
+    ctx.save();
+    this.panel({ x: x + 3, y: y + 4, w, h }, '#4C2C1D', null, 10);
+    this.panel(rect, '#FFFDF6', '#332619', 10);
+    const tailX = x + w * 0.86, tail = Math.min(14, h * 0.25);
+    ctx.beginPath(); ctx.moveTo(tailX - tail, y + h - 1);
+    ctx.quadraticCurveTo(tailX - tail, y + h + tail, tailX + tail, y + h + tail);
+    ctx.quadraticCurveTo(tailX, y + h + tail * 0.4, tailX + tail * 0.3, y + h - 1);
+    ctx.fillStyle = '#FFFDF6'; ctx.fill(); ctx.strokeStyle = '#332619'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#FFFDF6'; ctx.fillRect(tailX - tail + 1, y + h - 3, tail * 1.3 - 2, 4);
+    ctx.restore();
+  }
+
+  shopRack(rect, rows, cellH) {
+    const ctx = this.ctx, { x, y, w, h } = rect;
+    const compact = cellH < 90, post = compact ? 5 : 12;
+    ctx.save();
+    this.panel({ x: x + 3, y: y + 7, w: w - 6, h: h + 5 }, '#482A1A', '#492915', 4);
+    this.panel({ x: x + post, y: y + 3, w: w - post * 2, h: h - 7 }, '#5E3825', null, 0);
+    for (let boardX = x + post; boardX < x + w - post; boardX += 44) {
+      ctx.fillStyle = '#70452C'; ctx.fillRect(boardX + 2, y + 4, 40, h - 10);
+      ctx.strokeStyle = '#59321E'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(boardX + 18, y + 4);
+      ctx.bezierCurveTo(boardX + 10, y + h * 0.3, boardX + 23, y + h * 0.7, boardX + 16, y + h - 6); ctx.stroke();
+    }
+    for (let row = 0; row < rows; row++) {
+      const shelfY = y + (row + 1) * cellH - (cellH > 60 ? 8 : 0) - 27;
+      ctx.fillStyle = '#352011'; ctx.fillRect(x + post, shelfY + 23, w - post * 2, 9);
+      this.panel({ x, y: shelfY - 3, w, h: 9 }, '#E7BA76', '#77451D', 1);
+      this.panel({ x, y: shelfY + 5, w, h: 23 }, '#BA8042', '#75431F', 1);
+      ctx.strokeStyle = '#DDA663'; ctx.lineWidth = 1;
+      for (let grain = 0; grain < 3; grain++) {
+        ctx.beginPath(); ctx.moveTo(x + 5, shelfY + 10 + grain * 5);
+        ctx.bezierCurveTo(x + w * 0.3, shelfY + 7 + grain * 5, x + w * 0.7, shelfY + 14 + grain * 4, x + w - 5, shelfY + 10 + grain * 5); ctx.stroke();
+      }
+      if (!compact) for (const bx of [x + post + 4, x + w - post - 24]) {
+        ctx.beginPath(); ctx.moveTo(bx, shelfY + 29); ctx.lineTo(bx + 20, shelfY + 29); ctx.lineTo(bx, shelfY + 47); ctx.closePath();
+        ctx.fillStyle = '#8C592E'; ctx.fill(); ctx.strokeStyle = '#492B18'; ctx.stroke();
+      }
+    }
+    for (const px of [x, x + w - post]) {
+      this.panel({ x: px, y, w: post, h }, '#A56B36', '#583216', 2);
+      ctx.fillStyle = '#D6A267'; ctx.fillRect(px + 2, y + 2, Math.max(1, post * 0.22), h - 4);
+      if (!compact) for (const py of [y + 14, y + h - 18]) {
+        ctx.beginPath(); ctx.arc(px + post / 2, py, 2, 0, Math.PI * 2); ctx.fillStyle = '#4D3928'; ctx.fill();
+      }
+    }
+    this.panel({ x, y, w, h: compact ? 4 : 12 }, '#C58F50', '#583216', 2);
+    ctx.restore();
   }
 
   modal(app, type) {

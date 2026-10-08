@@ -2,10 +2,10 @@
 
 // Values and sprite sizes come from Entities.lua and the original PNG assets.
 const ENTITY_CONFIG = {
-  MiniGold: { name: '小金块', mass: 2, bonus: 50, width: 10, height: 8, value: 'Normal' },
-  NormalGold: { name: '中金块', mass: 3.5, bonus: 100, width: 15, height: 13, value: 'Normal' },
-  NormalGoldPlus: { name: '大金块', mass: 5, bonus: 250, width: 20, height: 18, value: 'Normal' },
-  BigGold: { name: '巨型金块', mass: 7, bonus: 500, width: 32, height: 29, value: 'High' },
+  MiniGold: { name: '小金块', mass: 1.6, bonus: 50, width: 10, height: 8, value: 'Normal' },
+  NormalGold: { name: '中金块', mass: 2.8, bonus: 100, width: 15, height: 13, value: 'Normal' },
+  NormalGoldPlus: { name: '大金块', mass: 4, bonus: 250, width: 20, height: 18, value: 'Normal' },
+  BigGold: { name: '巨型金块', mass: 5.6, bonus: 500, width: 32, height: 29, value: 'High' },
   MiniRock: { name: '小石头', mass: 5.5, bonus: 11, width: 15, height: 11, value: 'Low' },
   NormalRock: { name: '石头', mass: 7, bonus: 20, width: 22, height: 19, value: 'Low' },
   BigRock: { name: '大石头', mass: 10, bonus: 100, width: 32, height: 28, value: 'Low' },
