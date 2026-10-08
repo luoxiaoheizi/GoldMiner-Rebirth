@@ -15,7 +15,7 @@ const PROP_IMAGES = {
 };
 const ASSETS = Array.from(new Set(Object.values(ENTITY_IMAGES).concat(Object.values(PROP_IMAGES), [
   'bg_level_A', 'bg_level_B', 'bg_level_C', 'bg_level_D', 'bg_level_E', 'bg_top',
-  'miner_sheet', 'hook_sheet', 'shopkeeper_sheet', 'explosive_fx_sheet', 'tnt_destroyed', 'hd_atlas',
+  'miner_sheet', 'hook_sheet', 'shopkeeper_sheet', 'explosive_fx_sheet', 'tnt_destroyed', 'hd_atlas', 'game_logo',
 ])));
 
 function inside(rect, x, y) {
@@ -317,7 +317,7 @@ class Renderer {
       this.button('sound', app.muted ? '声音关' : '声音开', { x: r.x + 84, y: r.y, w: 80, h: 48 }, 'sound', { primary: true });
       return;
     }
-    this.text('黄金矿工', r.x, r.y + 9, 23, C.primary, { font: 'title', bold: true });
+    this.text('矿工模拟器', r.x, r.y + 9, 23, C.primary, { font: 'title', bold: true });
     const soundX = r.x + r.w - (app.game.state === 'playing' ? 174 : 86);
     this.button('sound', app.muted ? '声音：关' : '声音：开', { x: soundX, y: r.y, w: 86, h: 48 }, 'sound');
     if (app.game.state === 'playing') {
@@ -331,8 +331,10 @@ class Renderer {
     const p = this.layout.panel, compact = p.h < 300;
     const blockH = compact ? (app.hasRun ? 166 : 146) : (app.hasRun ? 290 : 236);
     const y = p.y + Math.max(0, (p.h - blockH) / 2);
-    this.text('黄金矿工' + (compact ? ' · 重生' : ''), p.x, y, compact ? 29 : 42, C.primary, { font: 'title', bold: true });
-    if (!compact) this.text('重 生', p.x + 3, y + 51, 20, C.text, { font: 'title' });
+    this.ctx.save(); this.ctx.imageSmoothingEnabled = true;
+    this.image('game_logo', p.x + p.w - 52, y, 48, 48); this.ctx.restore();
+    this.text('矿工模拟器', p.x, y, compact ? 29 : 42, C.primary, { font: 'title', bold: true });
+    if (!compact) this.text('看准方向，开采矿藏', p.x + 3, y + 51, 20, C.text, { font: 'title' });
     this.text('看准时机，一钩好运。', p.x, y + (compact ? 37 : 88), 14, C.muted);
     const startY = y + (compact ? 62 : 124);
     this.button('start', app.hasRun ? '继续挖矿' : '开始挖矿', { x: p.x, y: startY, w: p.w, h: 48 }, app.hasRun ? 'continue' : 'new', { primary: true });
@@ -410,64 +412,131 @@ class Renderer {
     if (compact) {
       this.text(result.success ? '本关挖到 ' + result.earned + ' 金币' : '本关目标 ' + game.player.goal + ' 金币', p.x, y + 92, 13, C.muted);
       const half = (p.w - 8) / 2;
-      this.button('result-next', result.success ? '前往商店' : '再挖一次', { x: p.x, y: y + 116, w: half, h: 48 }, result.success ? 'shop' : 'restart', { primary: true, fontSize: 14 });
+      this.button('result-next', '再挖一次', { x: p.x, y: y + 116, w: half, h: 48 }, 'restart', { primary: true, fontSize: 14 });
       this.button('result-menu', '返回首页', { x: p.x + half + 8, y: y + 116, w: half, h: 48 }, 'menu', { fontSize: 14 });
     } else {
       this.wrapText(result.success ? '本关挖到 ' + result.earned + ' 金币，去商店挑件好工具吧。' : '目标是 ' + game.player.goal + ' 金币。小金块回收快，钻石价值高，再试一次吧。', p.x, y + 124, p.w, 15, C.muted, 23);
-      this.button('result-next', result.success ? '前往商店' : '再挖一次', { x: p.x, y: y + 196, w: p.w, h: 48 }, result.success ? 'shop' : 'restart', { primary: true });
+      this.button('result-next', '再挖一次', { x: p.x, y: y + 196, w: p.w, h: 48 }, 'restart', { primary: true });
       this.button('result-menu', '返回首页', { x: p.x, y: y + 256, w: p.w, h: 48 }, 'menu');
     }
   }
 
-  shop(app) {
-    const game = app.game, p = this.layout.panel, board = this.layout.board;
-    const item = game.shopItems[app.shopIndex % game.shopItems.length];
-    if (!item) return;
-    if (this.layout.portrait) {
-      const h = Math.min(440, board.h - 16), w = board.w - 24;
-      const card = { x: board.x + 12, y: board.y + (board.h - h) / 2, w, h };
-      this.panel(card, C.surface, C.border, 16);
-      const x = card.x + 16, y = card.y + 16, contentW = w - 32;
-      const compact = h < 370, navY = card.y + h - 176;
-      this.text('矿工补给站 · ' + (app.shopIndex + 1) + ' / ' + game.shopItems.length, x, y, 14, C.muted);
-      const image = this.images[PROP_IMAGES[item.id]];
-      if (image) {
-        const scale = Math.min(44 / image.width, 44 / image.height);
-        this.image(PROP_IMAGES[item.id], x, y + 28, image.width * scale, image.height * scale);
+  goldWall() {
+    const ctx = this.ctx, width = this.platform.width, height = this.platform.height;
+    ctx.fillStyle = '#FFCE1E'; ctx.fillRect(0, 0, width, height);
+    const size = Math.max(100, Math.min(width * 0.44, 240));
+    for (let row = -1; row < height / size + 1; row++) {
+      for (let col = -1; col < width / size + 1; col++) {
+        const x = col * size + (row % 2 ? size / 2 : 0), y = row * size;
+        const fill = ctx.createLinearGradient(x, y, x + size, y + size);
+        if (fill && fill.addColorStop) {
+          fill.addColorStop(0, '#FFF366'); fill.addColorStop(0.4, '#FFDA22'); fill.addColorStop(1, '#B8880C');
+        }
+        ctx.beginPath(); ctx.moveTo(x + size * 0.15, y);
+        ctx.bezierCurveTo(x + size * 0.25, y - size * 0.14, x + size * 0.4, y - size * 0.03, x + size * 0.58, y);
+        ctx.bezierCurveTo(x + size * 0.93, y - size * 0.07, x + size * 1.13, y + size * 0.2, x + size, y + size * 0.46);
+        ctx.bezierCurveTo(x + size * 1.08, y + size * 0.7, x + size * 0.97, y + size * 1.1, x + size * 0.64, y + size);
+        ctx.bezierCurveTo(x + size * 0.4, y + size * 1.08, x + size * 0.07, y + size * 1.07, x, y + size * 0.75);
+        ctx.bezierCurveTo(x - size * 0.13, y + size * 0.6, x - size * 0.05, y + size * 0.46, x, y + size * 0.35);
+        ctx.bezierCurveTo(x - size * 0.04, y + size * 0.12, x + size * 0.01, y + size * 0.03, x + size * 0.15, y); ctx.closePath();
+        ctx.fillStyle = fill || '#FFDA22'; ctx.fill();
+        ctx.strokeStyle = '#95700F'; ctx.lineWidth = 2; ctx.stroke();
       }
-      this.text(item.name, x + 56, y + 34, 22, C.text, { bold: true });
-      this.wrapText(item.description, x, y + (compact ? 70 : 90), contentW, compact ? 12 : 14, C.text, compact ? 17 : 22);
-      this.text('钱包：' + game.player.money + ' 金币', x, navY - 24, 14, C.text, { bold: true });
-      const half = (contentW - 12) / 2;
-      this.button('prev-item', '上一件', { x, y: navY, w: half, h: 48 }, 'prev-item');
-      this.button('next-item', '下一件', { x: x + half + 12, y: navY, w: half, h: 48 }, 'next-item');
+    }
+  }
+
+  victory(app) {
+    this.goldWall();
+    const l = this.layout, w = Math.min(l.w * 0.88, 700), h = Math.min(l.h * 0.26, 240);
+    const x = l.x + (l.w - w) / 2, y = l.y + (l.h - h) / 2;
+    this.panel({ x, y, w, h }, '#995009', '#EF8D00', 0);
+    this.ctx.strokeStyle = '#EF8D00'; this.ctx.lineWidth = 7; this.ctx.strokeRect(x, y, w, h);
+    this.text('恭喜你顺利过关', x + w / 2, y + h / 2 - 19, Math.min(32, w / 9.5), '#FFE57B', { align: 'center' });
+  }
+
+  woodWall() {
+    const ctx = this.ctx, w = this.platform.width, h = this.platform.height, plank = Math.max(54, w / 7);
+    ctx.fillStyle = '#784628'; ctx.fillRect(0, 0, w, h);
+    for (let x = 0, index = 0; x < w; x += plank, index++) {
+      ctx.fillStyle = index % 2 ? '#7D482A' : '#704027'; ctx.fillRect(x + 2, 0, plank - 4, h);
+      ctx.fillStyle = '#8F5431'; ctx.fillRect(x + 3, 0, 2, h);
+      ctx.strokeStyle = '#6B3B23'; ctx.lineWidth = 1;
+      for (let grain = 0; grain < 3; grain++) {
+        const gx = x + 13 + grain * plank / 4;
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.bezierCurveTo(gx - 5, h * 0.3, gx + 6, h * 0.6, gx, h); ctx.stroke();
+      }
+    }
+  }
+
+  shopIcon(id, x, y, size) {
+    const ctx = this.ctx;
+    ctx.save(); ctx.translate(x, y); ctx.scale(size / 100, size / 100);
+    ctx.lineWidth = 2; ctx.strokeStyle = '#352B37';
+    if (id === 'Dynamite') {
+      this.image('dynamite', 24, 4, 52, 90);
+    } else if (id === 'RockCollectorsBook') {
+      this.panel({ x: 17, y: 8, w: 65, h: 82 }, '#2D64C5', '#203866', 3);
+      this.panel({ x: 23, y: 3, w: 65, h: 7 }, '#F5F0DD', '#203866', 1);
+      this.text('矿石', 50, 19, 18, '#FFFFFF', { align: 'center', bold: true });
+      this.image('rock_normal', 29, 48, 44, 32);
+    } else if (id === 'LuckyClover') {
+      ctx.strokeStyle = '#236A26'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(50, 48); ctx.bezierCurveTo(73, 60, 64, 77, 47, 93); ctx.stroke();
+      for (const [cx, cy] of [[35, 26], [62, 26], [35, 49], [62, 49]]) {
+        ctx.beginPath(); ctx.ellipse(cx, cy, 17, 17, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#39B34B'; ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx - 5, cy - 6, 4, 0, Math.PI * 2); ctx.fillStyle = '#75DE61'; ctx.fill();
+      }
+    } else {
+      const gem = id === 'GemPolish';
+      ctx.beginPath(); ctx.moveTo(38, 12); ctx.lineTo(38, 29);
+      ctx.bezierCurveTo(28, 49, 14, 68, 25, 89); ctx.quadraticCurveTo(50, 100, 75, 89);
+      ctx.bezierCurveTo(86, 68, 72, 49, 62, 29); ctx.lineTo(62, 12); ctx.closePath();
+      ctx.fillStyle = gem ? '#4C7DEE' : '#E8BE50'; ctx.fill(); ctx.stroke();
+      this.panel({ x: 34, y: 7, w: 32, h: 8 }, gem ? '#91B4FF' : '#FDE07A', '#352B37', 3);
+      this.panel({ x: 30, y: 53, w: 40, h: 29 }, '#FFF2CC', null, 7);
+      if (gem) this.image('diamond', 38, 57, 25, 20);
+      else this.text('力', 50, 57, 24, '#8F4B20', { align: 'center', bold: true });
+      ctx.beginPath(); ctx.moveTo(33, 44); ctx.lineTo(25, 70); ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 5; ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  shop(app) {
+    this.woodWall();
+    const game = app.game, l = this.layout, wide = l.w > l.h;
+    const pad = 12, x = l.x + pad, w = l.w - pad * 2;
+    const balanceY = l.y + (wide ? 4 : Math.min(44, l.h * 0.055));
+    this.text('$ ' + game.player.money, l.x + l.w / 2, balanceY, wide ? 24 : 34, '#64CF36', { align: 'center', bold: true });
+    const bubbleY = balanceY + (wide ? 32 : 62), bubbleH = wide ? 32 : 74;
+    this.panel({ x, y: bubbleY, w, h: bubbleH }, '#FFFDF6', '#332619', 2);
+    this.wrapText('点击货架上的道具即可购买，买好后点击下一关继续游戏。', x + 12, bubbleY + 8, w - 24, wide ? 12 : 18, '#282018', wide ? 16 : 26);
+    const actionY = bubbleY + bubbleH + 16, half = (w - 24) / 2;
+    this.button('invite', '邀请好友', { x: x + 6, y: actionY, w: half - 6, h: 48 }, 'invite', { primary: true, fontSize: 20 });
+    this.button('next-level', '下一关', { x: x + half + 24, y: actionY, w: half - 6, h: 48 }, 'next-level', { primary: true, fontSize: 20 });
+    const goodsY = actionY + 64, goodsBottom = l.y + l.h - 64;
+    const columns = wide ? Math.max(1, game.shopItems.length) : 2;
+    const rows = Math.max(1, Math.ceil(game.shopItems.length / columns));
+    const cellW = w / columns, cellH = Math.max(48, (goodsBottom - goodsY) / rows);
+    game.shopItems.forEach((item, index) => {
+      const col = index % columns, row = Math.floor(index / columns);
+      const card = { x: x + col * cellW + 5, y: goodsY + row * cellH, w: cellW - 10, h: cellH - (cellH > 60 ? 8 : 0) };
       const enough = game.player.money >= item.price;
-      this.button('buy', item.purchased ? '已购买' : enough ? '购买 · ' + item.price + ' 金币' : '金币不足 · 需要 ' + item.price,
-        { x, y: navY + 56, w: contentW, h: 48 }, 'buy:' + item.id, { primary: true, disabled: item.purchased || !enough });
-      this.button('next-level', '准备下一关', { x, y: navY + 112, w: contentW, h: 48 }, 'next-level');
-      return;
-    }
-    this.panel(board, C.surface, C.border);
-    const compact = board.h < 220, pad = compact ? 12 : 20;
-    const x = board.x + pad, contentW = board.w - pad * 2;
-    const contentH = compact ? 154 : 196;
-    const y = board.y + Math.max(pad, (board.h - contentH) / 2);
-    this.text('矿工补给站 · ' + (app.shopIndex + 1) + ' / ' + game.shopItems.length, x, y, compact ? 12 : 15, C.muted);
-    if (!compact) this.sprite('shopkeeper_sheet', 0, 80, 80, board.x + board.w - pad - 42, y - 7, 42, 42);
-    const image = this.images[PROP_IMAGES[item.id]], size = compact ? 28 : 38;
-    if (image) {
-      const scale = Math.min(size / image.width, size / image.height);
-      this.image(PROP_IMAGES[item.id], x, y + 29, image.width * scale, image.height * scale);
-    }
-    this.text(item.name, x + size + 9, y + 31, compact ? 20 : 23, C.text, { bold: true });
-    this.wrapText(item.description, x, y + (compact ? 67 : 86), contentW, compact ? 12 : 14, C.muted, compact ? 17 : 22);
-    this.text('钱包：' + game.player.money + ' 金币', x, board.y + board.h - pad - 17, 14, C.primary, { bold: true });
-    const navY = p.y + Math.max(0, (p.h - 160) / 2), half = (p.w - 12) / 2;
-    this.button('prev-item', '上一件', { x: p.x, y: navY, w: half, h: 48 }, 'prev-item');
-    this.button('next-item', '下一件', { x: p.x + half + 12, y: navY, w: half, h: 48 }, 'next-item');
-    const enough = game.player.money >= item.price;
-    this.button('buy', item.purchased ? '已购买' : enough ? '购买 · ' + item.price + ' 金币' : '金币不足 · 需要 ' + item.price, { x: p.x, y: navY + 56, w: p.w, h: 48 }, 'buy:' + item.id, { primary: true, disabled: item.purchased || !enough });
-    this.button('next-level', '准备下一关', { x: p.x, y: navY + 112, w: p.w, h: 48 }, 'next-level');
+      const label = item.name + ' · ' + (item.purchased ? '已购买' : item.price + ' 金币');
+      const disabled = item.purchased || !enough || (item.id === 'Dynamite' && game.player.dynamiteCount >= 12);
+      this.buttons.push({ id: 'buy-' + item.id, label, ...card, action: 'buy:' + item.id, disabled });
+      if (this.focusId === 'buy-' + item.id || this.hoverId === 'buy-' + item.id) this.panel(card, '#8D542D', '#F9DA69', 8);
+      const image = this.images[PROP_IMAGES[item.id]];
+      const iconSize = Math.min(card.w * 0.63, Math.max(0, card.h - 64), 140);
+      if (image && iconSize > 0) {
+        this.shopIcon(item.id, card.x + (card.w - iconSize) / 2, card.y + card.h - 54 - iconSize, iconSize);
+      }
+      const shelfY = card.y + card.h - 27;
+      this.panel({ x: card.x - 5, y: shelfY, w: cellW, h: 26 }, '#DEB77A', '#9F733C', 0);
+      this.text(item.name, card.x + card.w / 2, shelfY - 24, wide ? 12 : 15, '#FFF2CB', { align: 'center' });
+      this.text(item.purchased ? '已购买' : '$ ' + item.price, card.x + card.w / 2, shelfY + 2, wide ? 15 : 20,
+        item.purchased || !enough ? '#71502A' : '#37891B', { align: 'center', bold: true });
+    });
   }
 
   modal(app, type) {
@@ -522,7 +591,7 @@ class Renderer {
   loading(app) {
     const l = this.layout;
     const x = l.x + l.w / 2, y = l.y + l.h / 2 - 64;
-    this.text('黄金矿工 · 重生', x, y, 34, C.primary, { font: 'title', align: 'center', bold: true });
+    this.text('矿工模拟器', x, y, 34, C.primary, { font: 'title', align: 'center', bold: true });
     this.text(app.loadError ? '矿区资源加载失败' : `正在准备矿区… ${app.progress}%`, x, y + 58, 16, C.text, { align: 'center' });
     if (app.loadError) {
       this.text('请检查资源文件，然后重试。', x, y + 89, 14, C.muted, { align: 'center' });
@@ -538,24 +607,28 @@ class Renderer {
     this.buttons = [];
     if (!app.loaded) this.loading(app);
     else {
-      this.header(app);
-      this.drawBoard(app.game, app.game.state === 'menu');
-      if (this.layout.portrait && ['menu', 'ready', 'result', 'gameover'].includes(app.game.state)) {
-        const p = this.layout.panel;
-        this.panel({ x: p.x - 8, y: p.y - 16, w: p.w + 16, h: p.h + 32 }, C.surface, C.border, 16);
+      const fullScreen = ['result', 'shop'].includes(app.game.state);
+      if (!fullScreen) {
+        this.header(app);
+        this.drawBoard(app.game, app.game.state === 'menu');
+        if (this.layout.portrait && ['menu', 'ready', 'gameover'].includes(app.game.state)) {
+          const p = this.layout.panel;
+          this.panel({ x: p.x - 8, y: p.y - 16, w: p.w + 16, h: p.h + 32 }, C.surface, C.border, 16);
+        }
       }
       switch (app.game.state) {
         case 'menu': this.menu(app); break;
         case 'ready': this.ready(app); break;
         case 'playing': case 'paused': this.playing(app); break;
-        case 'result': case 'gameover': this.result(app); break;
+        case 'result': this.victory(app); break;
+        case 'gameover': this.result(app); break;
         case 'shop': this.shop(app); break;
       }
       if (app.modal) this.modal(app, app.modal);
       else if (app.game.state === 'paused') this.modal(app, 'paused');
     }
     if (app.notice) {
-      const l = this.layout, board = l.board;
+      const l = this.layout, board = ['shop', 'result'].includes(app.game.state) ? { x: l.x, y: l.y, w: l.w, h: l.h } : l.board;
       const w = Math.min(board.w - 16, 470), h = 48;
       const candidates = [
         { x: board.x + (board.w - w) / 2, y: board.y + board.h - h - 6, w, h },

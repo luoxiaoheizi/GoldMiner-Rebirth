@@ -5,6 +5,34 @@ const assert = require('node:assert/strict');
 const { App } = require('../src/main');
 const { Game } = require('../src/core/game');
 
+test('过关提示自动进入商店，后台不计时，下一关直接开玩', async t => {
+  const f = fixture(); t.after(() => f.app.destroy()); await f.app.ready;
+  f.app.act('new'); f.app.act('begin'); f.app.game.player.money = 1500; f.app.act('finish');
+  f.callbacks.frame(0); f.callbacks.frame(1000);
+  assert.equal(f.app.game.state, 'result');
+  assert.equal(f.app.renderer.buttons.length, 0);
+  f.callbacks.Hide(); f.callbacks.Show(); f.callbacks.frame(100000);
+  assert.equal(f.app.game.state, 'result');
+  f.callbacks.frame(100600);
+  assert.equal(f.app.game.state, 'shop');
+  const item = f.app.game.shopItems[0], money = f.app.game.player.money;
+  f.app.act('buy:' + item.id);
+  assert.equal(f.app.game.player.money, money - item.price);
+  f.app.act('buy:' + item.id);
+  assert.equal(f.app.game.player.money, money - item.price);
+  f.app.act('next-level');
+  assert.equal(f.app.game.state, 'playing'); assert.equal(f.app.game.player.level, 2);
+});
+
+test('邀请好友只打开分享，不扣金币、不要求分享才能继续', async t => {
+  const f = fixture(); t.after(() => f.app.destroy()); await f.app.ready;
+  f.app.act('new'); f.app.act('begin'); f.app.game.player.money = 1500; f.app.act('finish'); f.app.act('shop');
+  let called = 0; f.platform.shareGame = () => { called++; return Promise.resolve('opened'); };
+  f.app.act('invite'); await Promise.resolve();
+  assert.equal(called, 1); assert.equal(f.app.game.player.money, 1500);
+  assert.equal(f.app.game.state, 'shop');
+});
+
 function fixture(options = {}) {
   const callbacks = {};
   let saved = options.saved || null;

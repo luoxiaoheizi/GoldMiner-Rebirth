@@ -111,7 +111,7 @@ test('本机预览返回静态资源并拒绝越界路径和写请求', async ()
     assert.equal(page.status, 200);
     assert.match(page.headers.get('content-type'), /text\/html/);
     assert.match(page.headers.get('content-security-policy'), /script-src 'self'/);
-    assert.match(await page.text(), /黄金矿工/);
+    assert.match(await page.text(), /矿工模拟器/);
     const image = await fetch(base + '/images/gold_big.png');
     assert.equal(image.status, 200);
     assert.equal(image.headers.get('content-type'), 'image/png');

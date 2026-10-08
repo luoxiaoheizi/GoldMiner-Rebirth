@@ -31,7 +31,7 @@ function createPlatform(kind, options) {
   const platform = {
     kind, canvas, context, width: 0, height: 0, dpr: 1, safeArea: null,
     reducedMotion: Boolean(isWeb && root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches),
-    createImage, loadImage, playSound, setMuted, mute: setMuted, readSave, writeSave,
+    createImage, loadImage, playSound, setMuted, mute: setMuted, readSave, writeSave, shareGame,
     onPointer: (fn) => subscribe('pointer', fn), onKey: (fn) => subscribe('key', fn),
     onResize: (fn) => subscribe('resize', fn), onHide: (fn) => subscribe('hide', fn),
     onShow: (fn) => subscribe('show', fn), requestFrame, cancelFrame, destroy,
@@ -109,6 +109,19 @@ function createPlatform(kind, options) {
     emit('resize', { width, height, dpr, safeArea: platform.safeArea });
   }
   function createImage() { return isWeb ? new root.Image() : sdk.createImage(); }
+  function shareGame() {
+    const title = '矿工模拟器：看准时机，一起挖矿闯关！';
+    try {
+      if (!isWeb) {
+        if (typeof sdk.shareAppMessage !== 'function') return Promise.resolve('unsupported');
+        sdk.shareAppMessage({ title, imageUrl: 'images/game_logo.png' });
+        return Promise.resolve('opened');
+      }
+      if (!root.navigator || typeof root.navigator.share !== 'function') return Promise.resolve('unsupported');
+      return Promise.resolve(root.navigator.share({ title, text: '抓取金块和钻石，购买道具，挑战下一关。', url: root.location.href }))
+        .then(() => 'completed', error => error && error.name === 'AbortError' ? 'cancelled' : 'failed');
+    } catch (_) { return Promise.resolve('failed'); }
+  }
   function loadImage(path) {
     return new Promise((resolve, reject) => {
       const img = createImage();
@@ -200,6 +213,10 @@ function createPlatform(kind, options) {
     bind(root, 'focus', show);
     bind(doc, 'visibilitychange', () => { if (doc.hidden) hide(); else show(); });
   } else {
+    if (typeof sdk.showShareMenu === 'function') {
+      try { sdk.showShareMenu({ menus: ['shareAppMessage'] }); } catch (_) { /* Older SDK. */ }
+    }
+    bindSdk('onShareAppMessage', () => ({ title: '矿工模拟器：看准时机，一起挖矿闯关！', imageUrl: 'images/game_logo.png' }));
     const touch = (type) => (event) => {
       const point = (event.changedTouches && event.changedTouches[0]) || (event.touches && event.touches[0]);
       if (point) emit('pointer', { x: point.clientX === undefined ? point.x : point.clientX, y: point.clientY === undefined ? point.y : point.clientY, type });

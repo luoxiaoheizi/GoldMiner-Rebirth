@@ -4,6 +4,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createPlatform, SAVE_KEY } = require('../src/platform');
 
+test('微信邀请调用原生好友分享接口，异常与不支持不会中断游戏', async () => {
+  const mock = sdkMock(); let payload;
+  mock.sdk.shareAppMessage = value => { payload = value; };
+  const platform = createPlatform('wechat', { sdk: mock.sdk, root: {} });
+  assert.equal(await platform.shareGame(), 'opened');
+  assert.match(payload.title, /矿工模拟器/);
+  assert.equal(payload.imageUrl, 'images/game_logo.png');
+  mock.sdk.shareAppMessage = () => { throw new Error('unavailable'); };
+  assert.equal(await platform.shareGame(), 'failed');
+  delete mock.sdk.shareAppMessage;
+  assert.equal(await platform.shareGame(), 'unsupported'); platform.destroy();
+});
+
 function sdkMock() {
   const events = {};
   const transforms = [];

@@ -129,7 +129,7 @@ function build(options) {
 
       writeJson(path.join(target, 'game.json'), { deviceOrientation: 'portrait', showStatusBar: false });
       const project = {
-        description: '黄金矿工·重生：中文版单机小游戏',
+        description: '矿工模拟器：中文版单机小游戏',
         projectname: 'goldminer-rebirth-' + kind,
         miniprogramRoot: './',
         setting: { es6: true, minified: true, urlCheck: true },

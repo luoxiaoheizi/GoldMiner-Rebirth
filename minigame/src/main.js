@@ -21,6 +21,7 @@ class App {
     this.best = { money: 0, level: 1 };
     this.savedRun = null;
     this.shopIndex = 0;
+    this.resultElapsed = 0;
     this.lastTime = null;
     this.hidden = false;
     this.destroyed = false;
@@ -92,8 +93,9 @@ class App {
       this.lastTime = null;
       this.renderer.pressedId = null;
       this.shopIndex = 0;
+      this.resultElapsed = 0;
       this.announce(`${STATE_NAMES[event.state]}。第 ${this.game.player.level} 关，${this.game.player.money} 金币。`);
-      if (this.document) this.document.title = `${STATE_NAMES[event.state]} · 黄金矿工`;
+      if (this.document) this.document.title = `${STATE_NAMES[event.state]} · 矿工模拟器`;
     }
   }
 
@@ -168,7 +170,17 @@ class App {
       case 'resume': this.game.resume(); break;
       case 'finish': this.game.finishLevel(); break;
       case 'shop': this.game.openShop(); break;
-      case 'next-level': this.game.nextLevel(); break;
+      case 'next-level': if (this.game.nextLevel()) this.game.startLevel(); break;
+      case 'invite':
+        if (this.game.state !== 'shop') break;
+        Promise.resolve(this.platform.shareGame ? this.platform.shareGame() : 'unsupported').then(status => {
+          if (this.destroyed) return;
+          if (status === 'opened') this.notify('请在分享面板中选择好友。');
+          else if (status === 'unsupported') this.notify('请在微信中打开小游戏后邀请好友。');
+          else if (status === 'failed') this.notify('暂时无法打开分享，请稍后重试。');
+          this.render();
+        }).catch(() => { if (!this.destroyed) { this.notify('暂时无法打开分享，请稍后重试。'); this.render(); } });
+        break;
       case 'prev-item': this.shopIndex = (this.shopIndex + this.game.shopItems.length - 1) % this.game.shopItems.length; break;
       case 'next-item': this.shopIndex = (this.shopIndex + 1) % this.game.shopItems.length; break;
       case 'menu': this.modal = null; this.persist(); this.game.returnToMenu(); break;
@@ -316,7 +328,14 @@ class App {
       const now = Number.isFinite(time) ? time : Date.now();
       const dt = this.lastTime == null ? 0 : Math.max(0, (now - this.lastTime) / 1000);
       this.lastTime = now;
-      if (this.loaded) this.game.update(dt);
+      if (this.loaded) {
+        const wasResult = this.game.state === 'result';
+        this.game.update(dt);
+        if (wasResult && this.game.state === 'result' && !this.modal) {
+          this.resultElapsed += dt;
+          if (this.resultElapsed >= 1.5) this.game.openShop();
+        }
+      }
       this.render();
       this.schedule();
     });

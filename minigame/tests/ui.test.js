@@ -70,7 +70,8 @@ for (const viewport of viewports) {
       for (const hasRun of [false, true]) {
         const renderer = new Renderer(platform), app = appFor(platform, state, hasRun);
         const buttons = renderer.draw(app);
-        assert.ok(buttons.length, state);
+        if (state === 'result') assert.equal(buttons.length, 0, '过关页自动跳转，无需按钮');
+        else assert.ok(buttons.length, state);
         for (const button of buttons) {
           const name = state + '/' + button.id;
           assert.ok(button.w >= 44 && button.h >= 48, name + ' touch size');
@@ -83,7 +84,11 @@ for (const viewport of viewports) {
           assert.ok(buttons.some(button => button.id === 'bomb'));
           assert.ok(buttons.some(button => button.id === 'finish'));
         }
-        if (state === 'shop') assert.ok(buttons.some(button => button.id === 'next-level'));
+        if (state === 'shop') {
+          assert.ok(buttons.some(button => button.id === 'next-level'));
+          assert.ok(buttons.some(button => button.id === 'invite'));
+          assert.equal(buttons.filter(button => button.action.startsWith('buy:')).length, app.game.shopItems.length);
+        }
       }
     }
   });
@@ -105,19 +110,17 @@ test('portrait mining fills the available width and most of the screen; desktop 
   }
 });
 
-test('all shop descriptions fit above the wallet on the shortest supported board', () => {
+test('货架展示全部库存，已购买与金币不足的商品不能重复点击', () => {
   const viewport = viewports.find(item => item.name === '568 landscape 240 usable');
   const platform = { ...viewport, context: fakeContext(), dpr: 1, kind: 'web' };
   const renderer = new Renderer(platform), app = appFor(platform, 'shop');
-  const records = [];
-  const originalText = renderer.text.bind(renderer);
-  renderer.text = (value, x, y, size, color, options) => { records.push({ value, x, y, size }); originalText(value, x, y, size, color, options); };
-  for (let index = 0; index < app.game.shopItems.length; index++) {
-    app.shopIndex = index; records.length = 0; renderer.shop(app);
-    const wallet = records.find(item => item.value.startsWith('钱包：'));
-    const board = renderer.layout.board;
-    const descriptions = records.filter(item => item.x === board.x + 12 && item.y > board.y + 65 && item !== wallet);
-    descriptions.forEach(item => assert.ok(item.y + item.size <= wallet.y, app.game.shopItems[index].id + ': description/wallet overlap'));
+  app.game.shopItems[0].purchased = true;
+  app.game.shopItems[1].price = app.game.player.money + 1;
+  const buttons = renderer.draw(app);
+  for (const item of app.game.shopItems) {
+    const card = buttons.find(button => button.action === 'buy:' + item.id);
+    assert.ok(card); assert.match(card.label, new RegExp(item.name));
+    assert.equal(card.disabled, item.purchased || item.price > app.game.player.money);
   }
 });
 
@@ -135,7 +138,7 @@ test('竖屏商店的商品名称、说明与钱包不被操作按钮遮挡', ()
     for (let index = 0; index < app.game.shopItems.length; index++) {
       app.shopIndex = index; text.length = 0; renderer.buttons = []; renderer.shop(app);
       for (const item of text) for (const button of renderer.buttons) {
-        assert.equal(intersects(item, button), false, viewport.name + '/' + item.value + ' 被 ' + button.id + ' 遮挡');
+        if (!button.action.startsWith('buy:')) assert.equal(intersects(item, button), false, viewport.name + '/' + item.value + ' 被 ' + button.id + ' 遮挡');
       }
     }
   }

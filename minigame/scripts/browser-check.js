@@ -53,12 +53,12 @@ async function run() {
     const won = new Game({ random: () => 0.9 });
     won.startNew(); won.startLevel(); won.player.money = 1600; won.finishLevel();
     await injectRun(won);
-    await page.getByRole('button', { name: '前往商店', exact: true }).click();
-    await page.getByRole('button', { name: /^购买 ·/ }).click();
-    assert.equal(await page.getByRole('button', { name: '已购买', exact: true }).isDisabled(), true);
+    await page.getByRole('button', { name: '下一关', exact: true }).waitFor();
+    await page.getByRole('button', { name: /金币$/ }).first().click();
+    assert.equal(await page.getByRole('button', { name: /已购买$/ }).first().isDisabled(), true);
     await page.screenshot({ path: path.join(output, 'shop-desktop.png') });
-    await page.getByRole('button', { name: '准备下一关', exact: true }).click();
-    await page.getByRole('button', { name: '开始本关', exact: true }).waitFor();
+    await page.getByRole('button', { name: '下一关', exact: true }).click();
+    await page.getByRole('button', { name: '暂停', exact: true }).waitFor();
     checks.push('有效过关存档进入结算→商店→购买→下一关，购买按钮防重复');
 
     const playing = new Game({ random: () => 0.2 }); playing.startNew(); playing.startLevel(); playing.pause();
@@ -93,23 +93,24 @@ async function run() {
 
     await page.setViewportSize({ width: 844, height: 390 });
     await injectRun(won);
-    await page.getByRole('button', { name: '前往商店', exact: true }).click();
+    await page.getByRole('button', { name: '下一关', exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, 'shop-mobile.png') });
-    await page.getByRole('button', { name: '下一件', exact: true }).click();
-    await page.getByRole('button', { name: '准备下一关', exact: true }).click();
-    checks.push('窄横屏商店切换商品和进入下一关');
+    assert.equal(await page.getByRole('button', { name: '邀请好友', exact: true }).count(), 1);
+    await page.getByRole('button', { name: '下一关', exact: true }).click();
+    checks.push('窄横屏货架、邀请好友按钮和进入下一关');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await injectRun(won);
-    await page.getByRole('button', { name: '前往商店', exact: true }).click();
+    await page.screenshot({ path: path.join(output, 'victory-portrait.png') });
+    await page.getByRole('button', { name: '下一关', exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, 'shop-portrait.png') });
-    await page.getByRole('button', { name: '下一件', exact: true }).click();
-    await page.getByRole('button', { name: /^购买 ·/ }).click();
-    assert.equal(await page.getByRole('button', { name: '已购买', exact: true }).isDisabled(), true);
-    await page.getByRole('button', { name: '准备下一关', exact: true }).click();
-    await page.getByRole('button', { name: '开始本关', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: '邀请好友', exact: true }).count(), 1);
+    await page.getByRole('button', { name: /金币$/ }).first().click();
+    assert.equal(await page.getByRole('button', { name: /已购买$/ }).first().isDisabled(), true);
+    await page.getByRole('button', { name: '下一关', exact: true }).click();
+    await page.getByRole('button', { name: '暂停', exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, 'ready-portrait.png') });
-    checks.push('竖屏商店商品信息与操作分区，切换、购买及下一关可用');
+    checks.push('竖屏过关金块页面自动跳转，货架购买扣款、邀请按钮及下一关可用');
 
     const hdContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
     const hdPage = await hdContext.newPage();
